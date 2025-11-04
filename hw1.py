@@ -14,16 +14,18 @@ def input_error(func: Callable):
         except KeyError:
             return "Contact not found. Please check the name."
         except ValueError:
-            return "Give me name and phone please."
+            return "Invalid arguments. Plese check command arguments using command: help "
         except IndexError:
             return "Enter user name."
+        except AttributeError:
+            return "Contact not found. Please check the name."
         except Exception as e:
             return f"Unexpected error: {e}"
     return wrapper
 
 
 class Field:
-    def __init__(self, value):
+    def __init__(self, value: str):
         self.value = value
 
     def __str__(self) -> str:
@@ -58,13 +60,11 @@ class Birthday(Field):
         if not isinstance(value, str):
             raise TypeError("Birthday must be a string in 'DD.MM.YYYY' format.")
         try:
-            date = datetime.strptime(value.strip(), '%d.%m.%Y').date()
+            datetime.strptime(value.strip(), '%d.%m.%Y').date()
         except ValueError:
             raise ValueError("Birthday date must be in 'DD.MM.YYYY' format.")
-        super().__init__(date)
+        super().__init__(value)
 
-    def __str__(self):
-        return self.value.strftime('%d.%m.%Y')
 
 
 class Record:
@@ -106,7 +106,8 @@ class Record:
 
     def __str__(self) -> str:
         phones_str = "; ".join(p.value for p in self.phones) if self.phones else "No phones"
-        return f"Contact name: {self.name.value}, phones: {phones_str}, birthday:{self.birthday}"
+        bday = self.birthday.value if self.birthday else "No birthday"
+        return f"Contact name: {self.name.value}, phones: {phones_str}, birthday: {bday}"
 
     def __repr__(self) -> str:
         return f"Record(name={self.name!r}, phones={self.phones!r}, birthday={self.birthday})"
@@ -133,7 +134,7 @@ class AddressBook(UserDict):
         for record in self.data.values():
             if not record.birthday:
                 continue
-            bday: date = record.birthday.value
+            bday: date = datetime.strptime(record.birthday.value.strip(), '%d.%m.%Y').date()
             this_year_bday = bday.replace(year=today.year)
             if this_year_bday < today:
                 this_year_bday = this_year_bday.replace(year=today.year + 1)
@@ -146,7 +147,7 @@ class AddressBook(UserDict):
 
                 upcoming.append({
                     "name": record.name.value,
-                    "birthday": congratulate_day.strftime("%Y-%m-%d")
+                    "birthday": congratulate_day.strftime("%d.%m.%Y")
                 })
         return upcoming
 
@@ -191,8 +192,6 @@ def add_birthday(args: List[str], contacts: AddressBook) -> str:
     """Adds birthday to the contact."""
     name, birthday = args
     existing_record = contacts.find(name)
-    if not existing_record:
-        raise KeyError
     existing_record.edit_birthday(birthday)
     return f"Added birthday '{birthday}' to existing contact '{name}'."
 
@@ -202,9 +201,9 @@ def show_birthday(args: List[str], contacts: AddressBook) -> str:
     """Show contact's birthday's."""
     name = args[0]
     existing_record = contacts.find(name)
-    if not existing_record:
-        raise KeyError
-    return f"{name}: {existing_record.birthday}."
+    if existing_record.birthday:
+        return f"{name}: {existing_record.birthday.value}"
+    return f"{name} has no birthday set."
 
 
 @input_error
@@ -222,8 +221,6 @@ def change_contact(args: List[str], contacts: AddressBook) -> str:
     """Changes the phone number for an existing contact."""
     name, old_phone, new_phone = args
     record = contacts.find(name)
-    if not record:
-        raise KeyError
     record.edit_phone(old_phone, new_phone)
     return f"Contact '{name}': phone '{old_phone}' changed to '{new_phone}'."
 
@@ -233,8 +230,6 @@ def show_phone(args: List[str], contacts: AddressBook) -> str:
     """Shows all phones of a contact by name."""
     name = args[0]
     record = contacts.find(name)
-    if not record:
-        raise KeyError
     phones = "; ".join(ph.value for ph in record.phones) if record.phones else "No phones"
     return f"{name}: {phones}"
 
@@ -244,11 +239,7 @@ def show_all(args: List[str], contacts: AddressBook) -> str:
     """Shows all contacts in the AddressBook."""
     if not contacts.data:
         return "No contacts saved."
-    lines = []
-    for record in contacts.data.values():
-        phones = "; ".join(ph.value for ph in record.phones) if record.phones else "No phones"
-        lines.append(f"{record.name.value}: phones: {phones}")
-    return "\n".join(lines)
+    return str(contacts)
 
 
 def help_text() -> str:
